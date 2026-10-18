@@ -1,0 +1,33 @@
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+kubeconfig
+kubeconfig.*
+.kube/
+secrets/
+credentials/
+
+# Personal data, backup artifacts and raw diagnostics
+data/
+uploads/
+library/
+backups/
+private/
+*.sql
+*.sql.gz
+*.dump
+*.log
+*.journal
+diagnostics/
+google-takeout/
+
+# Local editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
