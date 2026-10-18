@@ -1,74 +1,96 @@
 # Operations and recovery
 
-These checks are intended for the existing host. No installation or infrastructure change is performed by this repository.
+## Application and host checks
 
-## Check the application and host
+Run these on the existing host:
 
 ```sh
 cd ~/immich-app
 docker compose ps
 docker compose logs --tail=200 immich-server
-
-df -h / /srv/immich-data
+df -h / /srv/data
+findmnt /srv/data
 free -h
 systemctl --failed
 ```
 
-Review log output privately before sharing it. A running container alone does not prove that photo uploads and background jobs work.
+The recorded reboot check confirmed that the backup disk mounted and Immich, K3s, Tailscale, Serve configuration and the backup timer came back automatically.
 
-## Check K3s
+## Recorded backup sequence
 
-```sh
-sudo k3s kubectl get nodes -o wide
-sudo k3s kubectl get pods -A
-sudo journalctl -u k3s -b --no-pager -n 200
-```
+| Time | Action | Retention or destination |
+| --- | --- | --- |
+| 02:00 daily | Immich's built-in database dump | 14 dumps |
+| 03:00 daily | systemd-triggered local backup | Second SSD under `/srv/data/backups/immich` |
 
-Record the installed version and relevant timestamps with diagnostic results.
+The schedule is recorded without an explicit timezone; verify the host timezone when reviewing the actual units.
 
-## Backup and restore
+The script `~/scripts/backup-immich.sh` stops `immich-server`, copies files with rsync, copies `.env` and `docker-compose.yml`, then restarts the server. Its log is `/var/log/immich-backup.log`.
 
-The project includes work on an Immich backup scheduled through a systemd timer. The exact unit name, schedule, destination and retention policy have not yet been captured here.
+- Source library: `/srv/immich-data/library/`
+- File destination: `/srv/data/backups/immich/files/`
+- Configuration destination: `/srv/data/backups/immich/config/`
 
-A recovery procedure must cover the media files, database and configuration needed to rebuild the installation. Use the [Immich backup and restore documentation](https://docs.immich.app/administration/backup-and-restore/) appropriate to the installed version. A successful copy operation is not evidence of a successful restore.
+The raw PostgreSQL data directory is `/srv/immich-data/postgres`; the described backup relies on the database dump rather than claiming that this live directory is safely copied.
 
-Validation to record:
+### What still needs a recovery test
 
-1. The destination is the expected mounted disk and has adequate free space.
-2. The job exits successfully and creates the expected backup artifacts.
-3. Database and library data are captured consistently.
-4. An isolated restore recovers a sample of photos, videos and metadata.
-5. The restore date, software version, elapsed time and any failures are recorded.
+The 02:00 dump and 03:00 file copy occur at different times. Stopping the application for the file copy does not retroactively make the earlier dump match that copy. Verify the actual dump path, its inclusion in the backup, and the consequences of writes between the two jobs.
 
-Do not publish database dumps or media backups. Record the outcome of the test, not private data.
+The original script and units are not included in the transcript. Review them for destination mount checks, exit-code handling, overlap prevention, and guaranteed application restart if copying fails. In particular, `nofail` allows the host to boot without the backup SSD; a job must not silently copy into an unmounted directory on the root disk.
 
-To discover the actual timer:
+A restore test should recover a database dump and media into an isolated installation and check sample photos, videos and metadata. Record versions, date, elapsed time and the outcome. No successful restore test, off-device copy, or file-backup retention policy is documented yet.
+
+The configuration backup includes secrets in `.env`; keep that backup private and restrict access. For version-specific recovery behavior, consult [Immich backup and restore](https://docs.immich.app/administration/backup-and-restore/).
+
+## Timer and log inspection
 
 ```sh
 systemctl list-timers --all
-```
-
-Then inspect the identified service's status and journal locally.
-
-## Persistent logs
-
-Retaining journald data across reboots is important for the freeze investigation. Verify persistence rather than assuming it:
-
-```sh
+sudo tail -n 100 /var/log/immich-backup.log
 journalctl --list-boots
 journalctl --disk-usage
 sudo journalctl -k -b -1 --no-pager
-sudo journalctl -b -1 -p warning --no-pager
 ```
 
-The project notes discuss `Storage=persistent` and `/var/log/journal`. Confirm the effective configuration, storage limit and availability of a previous boot after a controlled restart. A hard hang can still prevent the last messages from reaching disk.
+Find the actual unit names before inspecting their service journals. Review outputs privately before sharing.
 
-## Performance experiments
+## Monitoring
 
-TuneD discussions included `balanced`, `network-throughput` and `throughput-performance`, plus proposed `pi-eco`, `pi-turbo` and `pi-transfer` profiles. Custom profiles and performance gains are not yet verified.
+```sh
+sudo k3s kubectl get nodes -o wide
+sudo k3s kubectl get pods -n monitoring
+sudo k3s kubectl get pvc -n monitoring
+```
 
-Compare one change at a time using the same workload. Record the active profile, CPU load, temperature and transfer rate. Wi-Fi or encryption may limit transfers before SSD throughput becomes relevant. A profile called “turbo” does not itself imply CPU overclocking.
+Recorded custom metric names:
 
-## Google Photos migration
+```promql
+raspberrypi_cpu_temperature_celsius
+raspberrypi_throttled
+```
 
-The planned import workflow starts with retaining the original Google Takeout export and testing a small batch. Check dates, metadata, videos, album behavior and duplicates before a full import. Record the actual importer and its version when chosen; migration completion is not yet documented.
+The temperature exporter runs every 30 seconds. Check its implementation before interpreting the throttling value as a simple boolean; the original script is not included.
+
+Grafana graphs represent sampled data and query windows. Compare them with terminal measurements over the same interval rather than expecting an instantaneous match. The Node Exporter Full dashboard (ID 1860) was suggested; its import is not confirmed.
+
+## Persistent journald
+
+The diagnostic work found a vendor drop-in selecting `Storage=volatile`. The recorded fix was `/etc/systemd/journald.conf.d/90-persistent.conf`:
+
+```ini
+[Journal]
+Storage=persistent
+SystemMaxUse=500M
+RuntimeMaxUse=100M
+```
+
+The journal directory was created, permissions initialized with systemd-tmpfiles, journald restarted and the journal flushed. A retained previous boot still needs to be captured as evidence. A hard hang can prevent the final messages from being written.
+
+## Experiments and planned work
+
+**TuneD:** balanced, network-throughput and throughput-performance were discussed, as were custom pi-turbo and pi-eco profiles using performance and ondemand/schedutil governors. Application of these custom profiles and measured gains are not confirmed. Avoid changing several power-management settings during fault isolation.
+
+**Google Photos:** the proposed route was Google Takeout → immich-go → Immich. Import completion is not recorded. Test a small batch for dates, metadata, videos and duplicates. Re-encoded or edited copies can differ at the file level even if they depict the same photo.
+
+**Future work:** restore testing, alerts, dedicated Immich metrics, Argo CD/GitOps, access-policy refinement and CI/CD were suggestions, not completed features.

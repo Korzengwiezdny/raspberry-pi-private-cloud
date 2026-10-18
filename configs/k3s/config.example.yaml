@@ -1,0 +1,3 @@
+# Sanitized excerpt; merge with existing settings.
+# Replace with the host’s stable LAN IPv4 address before use.
+node-ip: "<PI_LAN_IP>"
