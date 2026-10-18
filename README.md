@@ -1,126 +1,89 @@
-# Raspberry Pi Private Cloud ☁️
+# Raspberry Pi Private Cloud
 
-**Self-hosted infrastructure · Raspberry Pi · Linux homelab**
+**A personal Linux homelab for self-hosted photos, private remote access and infrastructure operations.**
 
-> Building a private cloud on my own hardware to explore self-hosting, Linux administration, networking, storage, and infrastructure security.
+I am building and maintaining a private cloud on a Raspberry Pi 5, with Immich for photos and videos, Docker Compose for the application stack, and Tailscale for remote access. The project also includes work with K3s, monitoring, storage, backups and fault diagnosis.
 
-This repository documents my **Raspberry Pi private cloud project**: the decisions behind it, its architecture, configuration, operational practices, and lessons learned. The goal is not just to show a working service, but to explain **how the infrastructure is designed, maintained, and secured**.
+The practical challenge is keeping personal data accessible and recoverable on a small server. This repository records the architecture, operational checks and troubleshooting decisions behind that work.
 
-> **Documentation status:** Work in progress. The sections marked *To be documented* will be completed using the actual configuration. No unverified services or security features are claimed here.
+## At a glance
 
-## 🎯 Project goals
+| Area | Project scope |
+| --- | --- |
+| Hardware | Raspberry Pi 5 and two SSDs |
+| Photo service | Immich with Docker Compose, PostgreSQL and Valkey |
+| Access | Local network and Tailscale |
+| Kubernetes | K3s, including an explicit node IPv4 configuration |
+| Observability | Prometheus, Grafana and kube-prometheus-stack |
+| Operations | systemd backup scheduling, journald, SMART and USB diagnostics |
+| Experiments | TuneD profiles and Google Photos import |
 
-- Learn how to deploy and manage self-hosted services on a Raspberry Pi.
-- Understand the relationship between the operating system, networking, storage, and applications.
-- Document practical configuration and troubleshooting decisions.
-- Build a reproducible, security-conscious homelab project suitable for a technical portfolio.
+**Documentation status:** The service stack above comes from the project notes. Exact software versions, disk roles, proxy routing and recovery results are still being collected. This is a case study in progress, not a tested installation kit.
 
-## 🏗️ Architecture
+## Architecture overview
 
-The diagram below is a **conceptual overview**, not yet a verified map of the deployed network. The exact network path, services, and storage setup will be documented once confirmed.
+Immich is managed with Docker Compose. K3s is a separate part of the homelab; the diagram does not imply that Immich runs inside Kubernetes.
 
 ```mermaid
 flowchart LR
-    U["Client device"] --> N["Network access<br/>(details to be documented)"]
-    N --> R["Raspberry Pi<br/>Self-hosted server"]
-    R --> S["Cloud service(s)<br/>(details to be documented)"]
-    R --> D["Storage<br/>(details to be documented)"]
+    Local["Local client"] --> LAN["Home network"]
+    Remote["Remote client"] --> TS["Tailscale"]
+    subgraph Pi["Raspberry Pi 5"]
+        Access["Host network access"]
+        subgraph Compose["Docker Compose"]
+            Immich["Immich"]
+            DB["PostgreSQL"]
+            Queue["Valkey"]
+            Immich --> DB
+            Immich --> Queue
+        end
+        K3s["K3s"]
+        Ops["Host operations<br/>systemd and journald"]
+        Access --> Immich
+    end
+    LAN --> Access
+    TS --> Access
+    Pi --- SSD["Two SSDs<br/>mount and role inventory pending"]
 ```
 
-### Infrastructure inventory
+The proxy/ingress path and monitoring placement are described as open documentation items in [Architecture](docs/architecture.md).
 
-| Layer | Current documentation |
+## Technical case studies
+
+- **K3s node address selection:** an IPv6-related `secondaryNodeIP` problem led to an explicit `node-ip` setting in the persistent K3s configuration.
+- **Intermittent server freezes:** investigating the boundary between service failure, network loss and a host hang, using previous-boot logs, SSD/USB checks and power/temperature observations.
+- **Mobile photo uploads:** checking client connectivity and backup settings alongside Immich logs.
+
+See [Troubleshooting](docs/troubleshooting.md) for the symptoms, recorded actions and remaining validation. A confirmed root cause for the intermittent freezes is not yet documented.
+
+## Read the project
+
+| Document | What it covers |
 | --- | --- |
-| Hardware | Raspberry Pi — exact model and specifications to be documented |
-| Operating system | To be documented |
-| Cloud software / services | To be documented |
-| Data storage | To be documented |
-| Local and remote access | To be documented |
-| Network configuration | To be documented |
-| Backup and recovery | To be documented |
-| Monitoring and maintenance | To be documented |
+| [Architecture](docs/architecture.md) | Services, storage boundaries and deployment details to verify |
+| [Operations and recovery](docs/operations.md) | Health checks, backup validation, logs and maintenance |
+| [Troubleshooting](docs/troubleshooting.md) | K3s networking, freezes and mobile upload diagnosis |
+| [Evidence and next steps](docs/evidence.md) | The artifacts needed to complete the case study |
 
-This table will be updated with **specific versions, configurations, and reasons for choosing each solution**.
+## Skills demonstrated by the work
 
-## ⚙️ Deployment and configuration
+- Administering a Linux host and investigating systemd services.
+- Operating a containerized application with persistent data.
+- Separating application, network and host-level failure symptoms.
+- Working with Kubernetes node configuration and monitoring.
+- Designing backup verification and documenting recovery requirements.
 
-This section will become a step-by-step guide based on the real installation, including:
+The repository focuses on configuration and operations. It does not claim authorship of Immich, K3s or the other upstream tools.
 
-1. Preparing the Raspberry Pi and operating system.
-2. Configuring network connectivity and access.
-3. Setting up storage.
-4. Installing and configuring the cloud service(s).
-5. Validating the setup and documenting how to maintain it.
+## Next milestones
 
-**Installation commands are intentionally omitted for now:** they must match the actual software stack rather than an assumed one.
+- [ ] Record the OS, RAM, software versions and exact roles of both SSDs.
+- [ ] Add sanitized configuration from the running system.
+- [ ] Document the backup timer, retention policy and a restore test.
+- [ ] Add selected dashboard screenshots with dates and context.
+- [ ] Record the verification result after the K3s address fix.
+- [ ] Continue the freeze investigation with retained evidence.
 
-## 🔐 Security and privacy
+## Privacy
 
-A self-hosted cloud requires careful handling of access to the server and its data. The final documentation will describe **what is actually configured**, including any relevant authentication, network restrictions, updates, or secure remote-access mechanisms.
-
-**Never commit sensitive information**, such as:
-
-- Passwords, API tokens, SSH private keys, or recovery codes.
-- Real secrets from environment files or application configuration.
-- Personal data and backups.
-- Internal network details that are unnecessary for explaining the design.
-
-Where configuration examples are published, sensitive values should be replaced with clear placeholders.
-
-## 💾 Data and backups
-
-Storage and backup strategy are important parts of a private cloud. This section will document:
-
-- How data is stored and mounted.
-- Which data should be backed up.
-- Whether backups are automatic or manual.
-- How recovery can be tested.
-
-**Current implementation:** To be documented. A backup strategy will not be presented as implemented until it is confirmed.
-
-## 🛠️ Operations and troubleshooting
-
-Useful operational documentation will cover routine tasks and actual problems encountered during the build:
-
-| Topic | Notes |
-| --- | --- |
-| Starting and stopping services | To be documented |
-| Checking service health | To be documented |
-| Updates and maintenance | To be documented |
-| Troubleshooting and fixes | To be documented |
-
-An especially valuable part of this project will be documenting **the problem, the diagnosis, the fix, and what I learned** for real issues.
-
-## 📷 Screenshots and diagrams
-
-This repository will include selected screenshots and an updated architecture diagram once the actual setup is documented. Screenshots will be reviewed to avoid exposing private files, identities, network addresses, or credentials.
-
-## 📚 What this project demonstrates
-
-This homelab is an opportunity to practice and explain:
-
-- **Linux administration** — working with a server outside a managed cloud platform.
-- **Networking** — understanding how clients reach hosted services.
-- **Self-hosting** — maintaining services and infrastructure directly.
-- **Storage and reliability** — thinking about data persistence and recovery.
-- **Technical documentation** — recording design choices and making the setup understandable to others.
-
-These are the **areas the project is intended to demonstrate**. Exact implementation details and evidence will be added as the documentation progresses.
-
-## 🗺️ Next documentation steps
-
-- [ ] Add the Raspberry Pi model, OS, and hardware details.
-- [ ] Identify and describe each installed service.
-- [ ] Replace the conceptual diagram with the verified network architecture.
-- [ ] Document access methods and security controls.
-- [ ] Describe disks, storage, and backup/recovery procedures.
-- [ ] Add sanitized screenshots and configuration examples.
-- [ ] Record real troubleshooting cases and lessons learned.
-
----
-
-**Project type:** Personal homelab / self-hosted private cloud  
-**Platform:** Raspberry Pi  
-**Documentation language:** English  
-
-*This repository is a technical case study of a personal project, not a production-ready deployment guide.*
+Examples use placeholders rather than the server's real addresses. Credentials, photo libraries, backups, kubeconfig and raw diagnostic exports do not belong in this repository. The ignore rules reduce accidental additions but do not inspect file contents or remove files already tracked by Git.
