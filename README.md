@@ -49,6 +49,12 @@ flowchart LR
 
 Grafana is available on the LAN through NodePort 30300. Immich's Tailscale Serve path is separate from the Traefik route used by the test Nginx workload.
 
+## Monitoring dashboard
+
+![Grafana Node Exporter Full dashboard showing Raspberry Pi CPU, memory, network traffic and filesystem usage](screenshots/grafana-node-exporter.png)
+
+Grafana Node Exporter Full dashboard with host metrics collected by Prometheus. Captured on 24 October 2026 with a two-day query window; the displayed uptime is approximately nine minutes, so this image illustrates monitoring rather than uninterrupted availability. The Pressure panel has no data in this capture.
+
 ## Engineering work
 
 - **Storage migration:** moved active Immich data from the second SSD to the system SSD, preserving PostgreSQL ownership with `rsync --numeric-ids`. The second SSD became the local backup destination.
@@ -77,4 +83,4 @@ This case study is based on the supplied project history, including reconstructe
 
 ## Privacy
 
-Published examples replace host addresses and identifiers with placeholders. The repository contains no photo library, database dump, production environment file or full conversation export. Ignore rules help prevent accidental additions but do not inspect content or remove files already tracked by Git.
+Published configuration examples replace host addresses and identifiers with placeholders. The repository contains no photo library, database dump, production environment file or full conversation export. Ignore rules help prevent accidental additions but do not inspect content or remove files already tracked by Git.
