@@ -1,0 +1,10 @@
+[Unit]
+Description=Backup Immich na drugi dysk
+RequiresMountsFor=/srv/data
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=frank
+ExecStart=/home/frank/scripts/backup-immich.sh

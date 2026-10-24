@@ -1,0 +1,6 @@
+[Unit]
+Description=Export Raspberry Pi temperature metrics
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/export-pi-temp.sh
